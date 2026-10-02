@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>RoboFace Play Joystick</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:Arial,sans-serif;background:radial-gradient(circle at top,#303d5d,#080c13 72%);color:#fff;padding:18px}
+.app{max-width:1120px;margin:auto}
+.title{text-align:center;margin-bottom:15px}.title h1{margin:0;font-size:30px}.title p{margin:5px;color:#aeb9ca}
+.panel{background:#171d29;border:1px solid #344057;border-radius:28px;padding:20px;box-shadow:0 20px 60px #0008}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:15px}
+.status{display:flex;align-items:center;gap:9px}.dot{width:12px;height:12px;border-radius:50%;background:#777}.connected .dot{background:#35d07f}
+button{font:inherit;color:#fff;border:0;cursor:pointer}.connect{background:#2869ff;padding:10px 16px;border-radius:10px;font-weight:bold}
+.controller{background:#20283a;border:2px solid #3c4962;border-radius:70px;padding:30px 35px;display:grid;grid-template-columns:1fr 230px 1fr;gap:30px;align-items:center;min-height:470px}
+.side{display:flex;justify-content:center;align-items:center}
+.joy{width:210px;height:210px;border-radius:50%;background:#111722;border:3px solid #45536d;position:relative;box-shadow:inset 0 0 30px #0008}
+.joy:after{content:"";position:absolute;inset:28px;border:1px dashed #38465f;border-radius:50%}
+.stick{position:absolute;width:82px;height:82px;border-radius:50%;background:linear-gradient(#68758b,#2e384b);border:4px solid #111722;box-shadow:0 8px 0 #080b10;left:64px;top:64px;z-index:2;touch-action:none}
+.stick:active{box-shadow:0 3px 0 #080b10}
+.axes{text-align:center;margin-top:10px;color:#aeb9ca;font-size:12px}
+.center{text-align:center}.center h2{font-size:15px;margin:0 0 10px;color:#b9c4d5}.cmd{font-size:22px;font-weight:bold;margin:8px}
+.mini{background:#505c73;padding:8px 14px;border-radius:20px;font-size:11px;margin:3px}.stop{background:#c83232;font-weight:bold}
+.actions{display:grid;grid-template-columns:repeat(2,64px);gap:14px;justify-content:center}
+.action{width:64px;height:64px;border-radius:50%;background:#b82e49;border:2px solid #ed6a82;box-shadow:0 6px 0 #70182a;font-weight:bold}.action:active{transform:translateY(4px);box-shadow:none}
+.A{grid-column:2;grid-row:1}.B{grid-column:1;grid-row:2}.X{grid-column:2;grid-row:2}.Y{grid-column:1;grid-row:1}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.card{background:#101620;border:1px solid #303b50;border-radius:15px;padding:15px}
+label{display:flex;justify-content:space-between;margin-bottom:8px;color:#dce2ed}.val{font-weight:bold}input[type=range]{width:100%}
+.actions-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.secondary{background:#48546a;padding:9px 14px;border-radius:9px}.send{background:#2869ff;padding:9px 14px;border-radius:9px}
+.config{margin-top:14px}.config-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.config-item{background:#20283a;padding:9px;border-radius:10px}.config-item span{display:block;color:#aeb9ca;font-size:11px;margin-bottom:5px}
+input[type=text]{width:100%;background:#0b1018;color:#fff;border:1px solid #46536b;border-radius:7px;padding:8px}
+.log{margin-top:14px;background:#090e15;border-radius:11px;padding:9px;max-height:130px;overflow:auto;font:12px monospace;color:#aeb9ca}
+.note{text-align:center;color:#8f9db1;font-size:12px;margin-top:12px}
+@media(max-width:800px){.controller{grid-template-columns:1fr;gap:18px}.center{order:3}.cards{grid-template-columns:1fr}.config-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="title"><h1>🎮 RoboFace Play Joystick</h1><p>Controle estilo PlayStation 2 • transmissor Bluetooth UART</p></div>
+<div class="panel">
+<div class="top">
+ <div class="status" id="status"><span class="dot"></span><span id="statusText">Modo simulação</span></div>
+ <button class="connect" id="connect">Conectar micro:bit</button>
+</div>
+
+<div class="controller">
+ <div class="side">
+  <div>
+   <div class="joy" id="joy">
+    <div class="stick" id="stick"></div>
+   </div>
+   <div class="axes">X: <b id="xVal">0</b> &nbsp; Y: <b id="yVal">0</b></div>
+  </div>
+ </div>
+
+ <div class="center">
+  <h2>ROBOFACE</h2>
+  <button class="mini" id="start">START</button>
+  <button class="mini" id="select">SELECT</button>
+  <div class="cmd" id="command">—</div>
+  <div style="font-size:12px;color:#9eabbe">X = direção horizontal<br>Y = direção vertical</div>
+  <br>
+  <button class="mini stop" id="stop">STOP</button>
+ </div>
+
+ <div class="side">
+  <div class="actions">
+   <button class="action A" data-key="A">A</button>
+   <button class="action B" data-key="B">B</button>
+   <button class="action X" data-key="X">X</button>
+   <button class="action Y" data-key="Y">Y</button>
+  </div>
+ </div>
+</div>
+
+<div class="cards">
+ <div class="card">
+  <label>Velocidade máxima <span class="val" id="speedVal">80%</span></label>
+  <input id="speed" type="range" min="0" max="100" value="80">
+  <div class="actions-row"><button class="secondary" id="speedMinus">−</button><button class="secondary" id="speedPlus">+</button></div>
+ </div>
+ <div class="card">
+  <label>Aceleração <span class="val" id="accVal">25%</span></label>
+  <input id="acc" type="range" min="0" max="100" value="25">
+  <div class="actions-row"><button class="secondary" id="accMinus">−</button><button class="secondary" id="accPlus">+</button></div>
+ </div>
+</div>
+
+<div class="cards">
+ <div class="card">
+  <label>Modo do joystick</label>
+  <div style="color:#aeb9ca;font-size:13px;line-height:1.6">
+   O joystick envia continuamente os valores dos eixos.<br>
+   Centro = <b>X:0 Y:0</b>.
+  </div>
+ </div>
+ <div class="card">
+  <label>Mensagens do joystick</label>
+  <div style="color:#aeb9ca;font-size:13px;line-height:1.7">
+   <b>JOY:X:-100:Y:50;</b><br>
+   <b>MAX:80;</b><br>
+   <b>ACC:25;</b><br>
+   Ao soltar: <b>JOY:X:0:Y:0;</b>
+  </div>
+ </div>
+</div>
+
+<div class="card config">
+ <h3>⚙️ Comandos dos botões</h3>
+ <div class="config-grid">
+  <div class="config-item"><span>A</span><input id="cmdA" value="A"></div>
+  <div class="config-item"><span>B</span><input id="cmdB" value="B"></div>
+  <div class="config-item"><span>X</span><input id="cmdX" value="X"></div>
+  <div class="config-item"><span>Y</span><input id="cmdY" value="Y"></div>
+  <div class="config-item"><span>START</span><input id="cmdStart" value="START"></div>
+  <div class="config-item"><span>SELECT</span><input id="cmdSelect" value="SELECT"></div>
+ </div>
+ <div class="actions-row"><button class="send" id="save">Salvar configuração</button><button class="secondary" id="load">Restaurar</button></div>
+</div>
+
+<div class="log" id="log">Pronto. O joystick está em X:0 Y:0.</div>
+<div class="note">O site apenas transmite. A programação do movimento fica no MakeCode.</div>
+</div></div>
+
+<script>
+const SERVICE='6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const RX='6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+let uart=null, dragging=false, lastJoy='', joyTimer=null;
+
+const $=id=>document.getElementById(id);
+function log(x){$('log').innerHTML='<div>'+new Date().toLocaleTimeString()+' — '+x+'</div>'+$('log').innerHTML}
+async function send(cmd){
+ cmd=String(cmd).replace(/;/g,'');
+ $('command').textContent=cmd; log('TX: '+cmd+';');
+ if(uart){
+  try{
+   const d=new TextEncoder().encode(cmd+';');
+   for(let i=0;i<d.length;i+=20) await uart.writeValueWithoutResponse(d.slice(i,i+20));
+  }catch(e){log('Erro ao enviar: '+e.message)}
+ }
+}
+async function connect(){
+ try{
+  if(!navigator.bluetooth){alert('Use Chrome ou Edge com Web Bluetooth.');return}
+  const dev=await navigator.bluetooth.requestDevice({filters:[{services:[SERVICE]}],optionalServices:[SERVICE]});
+  const server=await dev.gatt.connect(), service=await server.getPrimaryService(SERVICE);
+  uart=await service.getCharacteristic(RX);
+  $('status').classList.add('connected');$('statusText').textContent='micro:bit conectado';log('Bluetooth conectado.');
+  dev.addEventListener('gattserverdisconnected',()=>{uart=null;releaseJoystick();$('status').classList.remove('connected');$('statusText').textContent='Desconectado';log('Bluetooth desconectado.')});
+ }catch(e){log('Conexão não realizada: '+e.message)}
+}
+$('connect').onclick=connect;
+
+const joy=$('joy'), stick=$('stick');
+function updateJoystick(clientX,clientY){
+ const r=joy.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
+ let dx=clientX-cx, dy=clientY-cy;
+ const max=(r.width-82)/2;
+ const dist=Math.hypot(dx,dy);
+ if(dist>max){dx=dx/dist*max;dy=dy/dist*max}
+ const x=Math.round(dx/max*100);
+ const y=Math.round(-dy/max*100);
+ stick.style.left=(r.width/2-41+dx)+'px';
+ stick.style.top=(r.height/2-41+dy)+'px';
+ $('xVal').textContent=x;$('yVal').textContent=y;
+ const msg='JOY:X:'+x+':Y:'+y;
+ if(msg!==lastJoy){lastJoy=msg;send(msg)}
+}
+function resetJoystick(){
+ dragging=false;
+ clearInterval(joyTimer);joyTimer=null;
+ stick.style.left='64px';stick.style.top='64px';
+ $('xVal').textContent='0';$('yVal').textContent='0';
+ lastJoy='';
+ send('JOY:X:0:Y:0');
+}
+joy.addEventListener('pointerdown',e=>{
+ e.preventDefault();dragging=true;joy.setPointerCapture?.(e.pointerId);updateJoystick(e.clientX,e.clientY);
+ clearInterval(joyTimer);
+ joyTimer=setInterval(()=>{
+  if(dragging) send('JOY:X:'+$('xVal').textContent+':Y:'+$('yVal').textContent);
+ },150);
+});
+joy.addEventListener('pointermove',e=>{if(dragging)updateJoystick(e.clientX,e.clientY)});
+joy.addEventListener('pointerup',resetJoystick);
+joy.addEventListener('pointercancel',resetJoystick);
+joy.addEventListener('lostpointercapture',()=>{if(dragging)resetJoystick()});
+
+document.querySelectorAll('[data-key]').forEach(b=>b.addEventListener('pointerdown',e=>{
+ e.preventDefault();const k=b.dataset.key;const id=k==='A'?'cmdA':k==='B'?'cmdB':k==='X'?'cmdX':'cmdY';send($(id).value);
+}));
+$('start').onclick=()=>send($('cmdStart').value);
+$('select').onclick=()=>send($('cmdSelect').value);
+$('stop').onclick=()=>send('STOP');
+
+$('speed').oninput=e=>{$('speedVal').textContent=e.target.value+'%';send('MAX:'+e.target.value)};
+$('acc').oninput=e=>{$('accVal').textContent=e.target.value+'%';send('ACC:'+e.target.value)};
+function step(id,d,min,max,val){const el=$(id);el.value=Math.max(min,Math.min(max,Number(el.value)+d));$(val).textContent=el.value+'%';send(id==='speed'?'MAX:'+el.value:'ACC:'+el.value)}
+$('speedMinus').onclick=()=>step('speed',-5,0,100,'speedVal');
+$('speedPlus').onclick=()=>step('speed',5,0,100,'speedVal');
+$('accMinus').onclick=()=>step('acc',-5,0,100,'accVal');
+$('accPlus').onclick=()=>step('acc',5,0,100,'accVal');
+
+const cfg=['A','B','X','Y','Start','Select'];
+$('save').onclick=()=>{let o={};cfg.forEach(k=>o[k]=$(k==='Start'?'cmdStart':k==='Select'?'cmdSelect':'cmd'+k).value);localStorage.roboPlayCfg=JSON.stringify(o);log('Configuração salva.')};
+$('load').onclick=()=>{try{let o=JSON.parse(localStorage.roboPlayCfg||'{}');cfg.forEach(k=>{let id=k==='Start'?'cmdStart':k==='Select'?'cmdSelect':'cmd'+k;if(o[k])$(id).value=o[k]});log('Configuração restaurada.')}catch(e){}};
+</script>
+</body>
+</html>
