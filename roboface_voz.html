@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboFace — Controle por Voz</title>
+<style>
+:root{--bg:#0b1020;--card:#151c31;--card2:#1d2742;--text:#f4f7ff;--muted:#aeb9d3;--accent:#6ee7b7;--danger:#ff6b6b;--line:#2c3858}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(135deg,#090e1b,#111a31);color:var(--text);min-height:100vh}
+header{padding:26px 20px;text-align:center;border-bottom:1px solid var(--line)}
+.logo{font-size:48px}.brand{font-size:30px;font-weight:800;letter-spacing:2px}.subtitle{color:var(--muted);margin-top:8px}
+main{max-width:1050px;margin:24px auto;padding:0 18px}
+.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px}
+.card{background:rgba(21,28,49,.96);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 12px 35px rgba(0,0,0,.22)}
+h2{margin:0 0 8px}.hint{color:var(--muted);line-height:1.5}
+button{border:0;border-radius:14px;padding:13px 18px;font-size:16px;font-weight:700;cursor:pointer;background:var(--card2);color:var(--text);margin:5px}
+button:hover{filter:brightness(1.15)}
+.primary{background:#198754}.danger{background:#b83b4b}.blue{background:#3159b8}
+.status{padding:13px 15px;border-radius:12px;background:#10172a;margin:15px 0;border:1px solid var(--line)}
+.status.ok{border-color:#198754}.status.err{border-color:var(--danger)}
+.big{font-size:28px;font-weight:800;margin:12px 0;word-break:break-word}
+.voicebox{min-height:105px;background:#10172a;border:1px dashed #415071;border-radius:15px;padding:18px;margin:14px 0}
+.label{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.command{font-family:monospace;font-size:24px;color:var(--accent);font-weight:800}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+td{padding:10px;border-bottom:1px solid var(--line)}td:last-child{font-family:monospace;color:var(--accent)}
+.controls{display:flex;flex-wrap:wrap;gap:4px}
+.history{max-height:300px;overflow:auto;background:#0d1425;border-radius:12px;padding:10px}
+.item{padding:9px;border-bottom:1px solid #202b45;font-family:monospace}
+footer{text-align:center;color:var(--muted);padding:25px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🤖🎤</div>
+  <div class="brand">ROBOFACE</div>
+  <div class="subtitle">Controle por Voz • Versão 1 — Comandos Prontos</div>
+</header>
+
+<main>
+<div class="grid">
+<section class="card">
+  <h2>🎤 Fale com o robô</h2>
+  <p class="hint">Clique em <b>Falar</b> e diga um dos comandos disponíveis. O RoboFace reconhece a palavra e envia somente a mensagem correspondente ao micro:bit.</p>
+
+  <div id="status" class="status">⚪ Desconectado do micro:bit</div>
+
+  <div class="controls">
+    <button class="primary" id="speakBtn">🎙️ Falar</button>
+    <button class="blue" id="connectBtn">🔵 Conectar Bluetooth</button>
+    <button class="danger" id="stopBtn">⛔ STOP</button>
+    <button id="simBtn">🧪 Simulação: OFF</button>
+  </div>
+
+  <div class="voicebox">
+    <div class="label">O que foi reconhecido</div>
+    <div class="big" id="heard">—</div>
+  </div>
+
+  <div class="voicebox">
+    <div class="label">Mensagem enviada</div>
+    <div class="command" id="sent">—</div>
+  </div>
+
+  <p class="hint" id="support"></p>
+</section>
+
+<section class="card">
+  <h2>🗣️ Comandos disponíveis</h2>
+  <p class="hint">Diga qualquer uma das palavras abaixo.</p>
+  <table>
+    <tr><td>Frente / Avançar</td><td>UP;</td></tr>
+    <tr><td>Ré / Voltar</td><td>DOWN;</td></tr>
+    <tr><td>Esquerda</td><td>LEFT;</td></tr>
+    <tr><td>Direita</td><td>RIGHT;</td></tr>
+    <tr><td>Centro</td><td>CENTER;</td></tr>
+    <tr><td>Pare / Parar / Stop</td><td>STOP;</td></tr>
+  </table>
+</section>
+
+<section class="card" style="grid-column:1/-1">
+  <h2>📡 Histórico</h2>
+  <div class="history" id="history"><div class="item">Aguardando comandos...</div></div>
+</section>
+</div>
+</main>
+
+<footer>RoboFace • O site transmite comandos. O comportamento do robô é definido pelo aluno no MakeCode.</footer>
+
+<script>
+const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const UART_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+let device=null, rxChar=null, simulation=false;
+
+const commands = {
+  'frente':'UP;', 'avançar':'UP;', 'avancar':'UP;',
+  'ré':'DOWN;', 're':'DOWN;', 'voltar':'DOWN;',
+  'esquerda':'LEFT;', 'direita':'RIGHT;',
+  'centro':'CENTER;',
+  'pare':'STOP;', 'parar':'STOP;', 'stop':'STOP;'
+};
+
+const statusEl=document.getElementById('status');
+const heardEl=document.getElementById('heard');
+const sentEl=document.getElementById('sent');
+const historyEl=document.getElementById('history');
+
+function status(msg, ok=false, err=false){
+  statusEl.textContent=msg;
+  statusEl.className='status'+(ok?' ok':'')+(err?' err':'');
+}
+
+function addHistory(text, msg){
+  if(historyEl.children.length===1 && historyEl.children[0].textContent==='Aguardando comandos...')
+    historyEl.innerHTML='';
+  const d=document.createElement('div');
+  d.className='item';
+  d.textContent=`${new Date().toLocaleTimeString()}  |  "${text}"  →  ${msg}`;
+  historyEl.prepend(d);
+}
+
+async function send(msg){
+  sentEl.textContent=msg;
+  addHistory(heardEl.textContent, msg);
+  if(simulation){
+    status('🧪 Simulação ativa — mensagem não enviada por Bluetooth', true);
+    return;
+  }
+  if(!rxChar){
+    status('⚠️ Micro:bit não conectado. Ative a Simulação ou conecte o Bluetooth.', false, true);
+    return;
+  }
+  try{
+    await rxChar.writeValue(new TextEncoder().encode(msg));
+    status('🟢 Comando enviado ao micro:bit', true);
+  }catch(e){
+    status('🔴 Erro ao enviar: '+e.message, false, true);
+  }
+}
+
+function recognize(text){
+  const normalized=text.toLowerCase().trim();
+  // Procura primeiro expressões completas e depois palavras.
+  for(const key of Object.keys(commands)){
+    if(normalized===key || normalized.includes(key)){
+      return commands[key];
+    }
+  }
+  return null;
+}
+
+document.getElementById('speakBtn').onclick=()=>{
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){
+    status('❌ Este navegador não oferece reconhecimento de voz. Use Chrome ou Edge.',false,true);
+    return;
+  }
+  const rec=new SpeechRecognition();
+  rec.lang='pt-BR';
+  rec.continuous=false;
+  rec.interimResults=false;
+  rec.maxAlternatives=1;
+  status('🎙️ Estou ouvindo...',true);
+  heardEl.textContent='Ouvindo...';
+  rec.start();
+
+  rec.onresult=(event)=>{
+    const text=event.results[0][0].transcript;
+    heardEl.textContent=text;
+    const msg=recognize(text);
+    if(msg) send(msg);
+    else{
+      sentEl.textContent='—';
+      addHistory(text,'não reconhecido');
+      status('🟡 Palavra não encontrada nos comandos prontos.',false,false);
+    }
+  };
+  rec.onerror=(e)=>{
+    status('❌ Não foi possível reconhecer a fala: '+e.error,false,true);
+  };
+  rec.onend=()=>{
+    if(statusEl.textContent==='🎙️ Estou ouvindo...') status('⚪ Pronto para ouvir');
+  };
+};
+
+document.getElementById('stopBtn').onclick=()=>{
+  heardEl.textContent='STOP';
+  send('STOP;');
+};
+
+document.getElementById('simBtn').onclick=()=>{
+  simulation=!simulation;
+  document.getElementById('simBtn').textContent='🧪 Simulação: '+(simulation?'ON':'OFF');
+  status(simulation?'🧪 Simulação ativada':'⚪ Simulação desativada',simulation);
+};
+
+document.getElementById('connectBtn').onclick=async()=>{
+  if(!navigator.bluetooth){
+    status('❌ Web Bluetooth não está disponível neste navegador.',false,true);
+    return;
+  }
+  try{
+    status('🔵 Escolha o micro:bit na janela do Bluetooth...');
+    device=await navigator.bluetooth.requestDevice({
+      filters:[{services:[UART_SERVICE]}]
+    });
+    device.addEventListener('gattserverdisconnected',()=>{
+      rxChar=null;
+      status('⚪ Micro:bit desconectado');
+    });
+    const server=await device.gatt.connect();
+    const service=await server.getPrimaryService(UART_SERVICE);
+    rxChar=await service.getCharacteristic(UART_RX);
+    status('🟢 Micro:bit conectado!',true);
+  }catch(e){
+    status('❌ Conexão cancelada ou com erro: '+e.message,false,true);
+  }
+};
+
+document.getElementById('support').textContent =
+  (('SpeechRecognition' in window)||('webkitSpeechRecognition' in window))
+  ? '✅ Seu navegador oferece reconhecimento de voz. Para Bluetooth, use Chrome ou Edge em HTTPS.'
+  : '⚠️ O reconhecimento de voz não está disponível neste navegador. Tente Chrome ou Edge.';
+
+if(!window.isSecureContext){
+  document.getElementById('support').textContent += ' A página precisa estar em HTTPS ou localhost.';
+}
+</script>
+</body>
+</html>
